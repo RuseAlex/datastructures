@@ -8,14 +8,6 @@ func New[T any]() *Stack[T] {
 	return &Stack[T]{}
 }
 
-func NewFromSlice[T any](elems ...T) *Stack[T] {
-	items := make([]T, len(elems))
-	items = append(items, elems...)
-	return &Stack[T]{
-		items: items,
-	}
-}
-
 func (s *Stack[T]) Push(elem T) {
 	s.items = append(s.items, elem)
 }

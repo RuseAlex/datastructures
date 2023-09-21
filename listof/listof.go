@@ -84,9 +84,9 @@ func (l *ListOf[T]) Len() int {
 }
 
 // Copy returns a copy of the list
-func (s *ListOf[T]) Copy() *ListOf[T] {
+func (l *ListOf[T]) Copy() *ListOf[T] {
 	newStack := ListOf[T]{
-		items: s.items,
+		items: l.items,
 	}
 
 	return &newStack
