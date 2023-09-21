@@ -4,25 +4,6 @@ package btree
 	I fucking hate B-trees and I hope I won't have to reimplement one of them ever again
 */
 
-// Comparator is a function that returns -1 if a < b, 0 if a == b and +1 if a > b
-type Comparator func(a, b any) int
-
-type Ordered interface {
-	Float | Integer | Character
-}
-
-// GenericComparator is a comparator function for the Ordered types (string, int, floats, etc.)
-func GenericComparator[T Ordered](a, b T) int {
-	switch {
-	case a > b:
-		return 1
-	case a < b:
-		return -1
-	default:
-		return 0
-	}
-}
-
 type Entry[K, V any] struct {
 	Key   K
 	Value V
@@ -51,6 +32,7 @@ func New[K, V any](order int, comparator Comparator) *BTree[K, V] {
 
 // ===========================PUBLIC METHODS===========================
 
+// Put inserts key-value pair node into the B-Tree
 func (b *BTree[K, V]) Put(key K, val V) {
 	entry := &Entry[K, V]{Key: key, Value: val}
 
@@ -65,6 +47,7 @@ func (b *BTree[K, V]) Put(key K, val V) {
 	}
 }
 
+// Get searches the node in the tree by key and returns its value or nil if key is not found in btree
 func (b *BTree[K, V]) Get(key K) (*V, bool) {
 	node, idx, found := b.search(b.Root, key)
 	if found {
@@ -74,11 +57,13 @@ func (b *BTree[K, V]) Get(key K) (*V, bool) {
 	return nil, false
 }
 
+// GetNode searches the node in the tree by key and returns it
 func (b *BTree[K, V]) GetNode(key K) *Node[K, V] {
 	node, _, _ := b.search(b.Root, key)
 	return node
 }
 
+// Remove removes the node from the tree by key
 func (b *BTree[K, V]) Remove(key K) {
 	node, idx, found := b.search(b.Root, key)
 	if found {
@@ -87,14 +72,17 @@ func (b *BTree[K, V]) Remove(key K) {
 	}
 }
 
+// IsEmpty checks if the btree is empty
 func (b *BTree[K, V]) IsEmpty() bool {
 	return b.size == 0
 }
 
+// Size returns the number of elements stored in the btree
 func (b *BTree[K, V]) Size() int {
 	return b.size
 }
 
+// Size returns the number of elements stored in the subtree
 func (node *Node[K, V]) Size() int {
 	if node == nil {
 		return 0
@@ -108,6 +96,7 @@ func (node *Node[K, V]) Size() int {
 	return size
 }
 
+// Keys returns all keys in-order
 func (b *BTree[K, V]) Keys() []K {
 	keys := make([]K, b.size)
 	iter := b.Iterator()
@@ -118,6 +107,7 @@ func (b *BTree[K, V]) Keys() []K {
 	return keys
 }
 
+// Values returns all values in-order based on the key
 func (b *BTree[K, V]) Values() []V {
 	values := make([]V, b.size)
 	iter := b.Iterator()
@@ -128,17 +118,61 @@ func (b *BTree[K, V]) Values() []V {
 	return values
 }
 
+// Clear removes all nodes from the tree
 func (b *BTree[K, V]) Clear() {
 	b.Root = nil
 	b.size = 0
 }
 
+// Height returns the height of the tree
 func (b *BTree[K, V]) Height() int {
 	return b.Root.height()
 }
 
+// Left returns the left-most (i.e. min) node or nil if tree is empty
 func (b *BTree[K, V]) Left() *Node[K, V] {
 	return b.left(b.Root)
+}
+
+// LeftKey returns the left-most (i.e. min) key or nil
+func (b *BTree[K, V]) LeftKey() *K {
+	if left := b.Left(); left != nil {
+		return &left.Entries[0].Key
+	}
+
+	return nil
+}
+
+// LeftValue returns the left-most value or nil if tree is empty.
+func (b *BTree[K, V]) LeftValue() *V {
+	if left := b.Left(); left != nil {
+		return &left.Entries[0].Value
+	}
+
+	return nil
+}
+
+// Right returns the right-most (max) node or nil if tree is empty.
+func (b *BTree[K, V]) Right() *Node[K, V] {
+	return b.right(b.Root)
+}
+
+// RightKey returns the right-most (max) key or nil if tree is empty.
+func (b *BTree[K, V]) RightKey() *K {
+	if right := b.Right(); right != nil {
+		return &right.Entries[len(right.Entries)-1].Key
+	}
+
+	return nil
+}
+
+// RightValue returns the right-most value or nil if tree is empty.
+func (b *BTree[K, V]) RightValue() *V {
+	if right := b.Right(); right != nil {
+		return &right.Entries[len(right.Entries)-1].Value
+	}
+
+	return nil
 }
 
 // ===========================PRIVATE METHODS===========================
@@ -282,8 +316,8 @@ func (b *BTree[K, V]) splitNonRoot(node *Node[K, V]) {
 	if !b.isLeaf(node) {
 		left.Children = append([]*Node[K, V](nil), node.Children[:middle+1]...)
 		right.Children = append([]*Node[K, V](nil), node.Children[middle+1:]...)
-		setParent(left.Children, left)
-		setParent(right.Children, right)
+		setParent[K, V](left.Children, left)
+		setParent[K, V](right.Children, right)
 	}
 
 	insertPos, _ := b.searchNode(parent, node.Entries[middle].Key)
@@ -291,18 +325,211 @@ func (b *BTree[K, V]) splitNonRoot(node *Node[K, V]) {
 	parent.Entries = append(parent.Entries, nil)
 	copy(parent.Entries[insertPos+1:], parent.Entries[insertPos:])
 	parent.Entries[insertPos] = node.Entries[middle]
+
+	parent.Children[insertPos] = left
+
+	parent.Children = append(parent.Children, nil)
+	copy(parent.Children[insertPos+2:], parent.Children[insertPos+1:])
+	parent.Children[insertPos+1] = right
+
+	b.split(parent)
 }
 
-// Helpful interfaces (ignore them)
+func (b *BTree[K, V]) splitRoot() {
+	middle := b.middle()
 
-type Integer interface {
-	~int | ~int8 | ~int16 | ~int32 | ~int64 | ~uint | ~uint8 | ~uint32 | ~uint64 | byte
+	left := &Node[K, V]{Entries: append(
+		[]*Entry[K, V](nil),
+		b.Root.Entries[:middle]...)}
+	right := &Node[K, V]{Entries: append(
+		[]*Entry[K, V](nil),
+		b.Root.Entries[middle+1:]...)}
+
+	if !b.isLeaf(b.Root) {
+		left.Children = append([]*Node[K, V](nil), b.Root.Children[:middle+1]...)
+		right.Children = append([]*Node[K, V](nil), b.Root.Children[middle+1:]...)
+		setParent[K, V](left.Children, left)
+		setParent[K, V](right.Children, right)
+	}
+
+	newRoot := &Node[K, V]{
+		Entries:  []*Entry[K, V]{b.Root.Entries[middle]},
+		Children: []*Node[K, V]{left, right},
+	}
+
+	left.Parent = newRoot
+	right.Parent = newRoot
+	b.Root = newRoot
 }
 
-type Character interface {
-	~string | ~rune
+func setParent[K, V any](nodes []*Node[K, V], parent *Node[K, V]) {
+	for _, node := range nodes {
+		node.Parent = parent
+	}
 }
 
-type Float interface {
-	~float32 | ~float64
+func (b *BTree[K, V]) left(node *Node[K, V]) *Node[K, V] {
+	if b.IsEmpty() {
+		return nil
+	}
+	curNode := node
+	for {
+		if b.isLeaf(curNode) {
+			return curNode
+		}
+
+		curNode = curNode.Children[0]
+	}
+}
+
+func (b *BTree[K, V]) right(node *Node[K, V]) *Node[K, V] {
+	if b.IsEmpty() {
+		return nil
+	}
+	curNode := node
+	for {
+		if b.isLeaf(curNode) {
+			return curNode
+		}
+		curNode = curNode.Children[len(curNode.Children)-1]
+	}
+}
+
+func (b *BTree[K, V]) leftSibling(node *Node[K, V], key K) (*Node[K, V], int) {
+	if node.Parent != nil {
+		idx, _ := b.searchNode(node.Parent, key)
+		idx--
+		if idx >= 0 && idx < len(node.Parent.Children) {
+			return node.Parent.Children[idx], idx
+		}
+	}
+
+	return nil, -1
+}
+
+func (b *BTree[K, V]) rightSibling(node *Node[K, V], key K) (*Node[K, V], int) {
+	if node.Parent != nil {
+		idx, _ := b.searchNode(node.Parent, key)
+		idx++
+		if idx < len(node.Parent.Children) {
+			return node.Parent.Children[idx], idx
+		}
+	}
+
+	return nil, -1
+}
+
+func (b *BTree[K, V]) delete(node *Node[K, V], idx int) {
+	if b.isLeaf(node) {
+		deletedKey := node.Entries[idx].Key
+		b.deleteEntry(node, idx)
+		b.rebalance(node, deletedKey)
+		if len(b.Root.Entries) == 0 {
+			b.Root = nil
+		}
+		return
+	}
+
+	// deleting from an internal node
+	leftLargestNode := b.right(node.Children[idx]) //largest node in the left subtree (we assume it exists)
+	leftLargestEntryIndex := len(leftLargestNode.Entries) - 1
+	node.Entries[idx] = leftLargestNode.Entries[leftLargestEntryIndex]
+	deletedKey := leftLargestNode.Entries[leftLargestEntryIndex].Key
+	b.deleteEntry(leftLargestNode, leftLargestEntryIndex)
+	b.rebalance(leftLargestNode, deletedKey)
+}
+
+func (b *BTree[K, V]) rebalance(node *Node[K, V], deletedKey K) {
+	// check if we need to re-balance it in the first place
+	if node == nil || len(node.Entries) >= b.minEntries() {
+		return
+	}
+
+	// we try to borrow from the left sibling
+	leftSibling, leftSiblingIndex := b.leftSibling(node, deletedKey)
+	if leftSibling != nil && len(leftSibling.Entries) > b.minEntries() {
+		// rotate right
+		node.Entries = append([]*Entry[K, V]{node.Parent.Entries[leftSiblingIndex]}, node.Entries...)
+		node.Parent.Entries[leftSiblingIndex] = leftSibling.Entries[len(leftSibling.Entries)-1]
+		b.deleteEntry(leftSibling, len(leftSibling.Entries)-1)
+		if !b.isLeaf(leftSibling) {
+			leftSiblingRightMostChild := leftSibling.Children[len(leftSibling.Children)-1]
+			leftSiblingRightMostChild.Parent = node
+			node.Children = append([]*Node[K, V]{leftSiblingRightMostChild}, node.Children...)
+			b.deleteChild(leftSibling, len(leftSibling.Children)-1)
+		}
+		return
+	}
+
+	// we try to borrow now from the right sibling
+	rightSibling, rightSiblingIndex := b.rightSibling(node, deletedKey)
+	if rightSibling != nil && len(rightSibling.Entries) > b.minEntries() {
+		// rotate left
+		node.Entries = append(node.Entries, node.Parent.Entries[rightSiblingIndex-1])
+		node.Parent.Entries[rightSiblingIndex-1] = rightSibling.Entries[0]
+		b.deleteEntry(rightSibling, 0)
+		if !b.isLeaf(rightSibling) {
+			rightSiblingLeftMostChild := rightSibling.Children[0]
+			rightSiblingLeftMostChild.Parent = node
+			node.Children = append(node.Children, rightSiblingLeftMostChild)
+			b.deleteChild(rightSibling, 0)
+		}
+		return
+	}
+
+	// merge with siblings
+	if rightSibling != nil {
+		// merge with the right sibling
+		node.Entries = append(node.Entries, node.Parent.Entries[rightSiblingIndex-1])
+		node.Entries = append(node.Entries, rightSibling.Entries...)
+		deletedKey = node.Parent.Entries[rightSiblingIndex-1].Key
+		b.deleteEntry(node.Parent, rightSiblingIndex-1)
+		b.appendChildren(node.Parent.Children[rightSiblingIndex], node)
+		b.deleteChild(node.Parent, rightSiblingIndex)
+	} else if leftSibling != nil {
+		// merge with the left sibling
+		entries := append([]*Entry[K, V](nil), leftSibling.Entries...)
+		entries = append(entries, node.Parent.Entries[leftSiblingIndex])
+		node.Entries = append(entries, node.Entries...)
+		deletedKey = node.Parent.Entries[leftSiblingIndex].Key
+		b.deleteEntry(node.Parent, leftSiblingIndex)
+		b.prependChildren(node.Parent.Children[leftSiblingIndex], node)
+		b.deleteChild(node.Parent, leftSiblingIndex)
+	}
+
+	// make the merged node the root if its parent was the root and the root are empty
+	if node.Parent == b.Root && len(b.Root.Entries) == 0 {
+		b.Root = node
+		node.Parent = nil
+		return
+	}
+
+	// parent node may underflow, so we might need to re-balance it
+	b.rebalance(node.Parent, deletedKey)
+}
+
+func (b *BTree[K, V]) prependChildren(fromNode *Node[K, V], toNode *Node[K, V]) {
+	children := append([]*Node[K, V](nil), fromNode.Children...)
+	toNode.Children = append(children, toNode.Children...)
+	setParent(fromNode.Children, toNode)
+}
+
+func (b *BTree[K, V]) appendChildren(fromNode *Node[K, V], toNode *Node[K, V]) {
+	toNode.Children = append(toNode.Children, fromNode.Children...)
+	setParent(fromNode.Children, toNode)
+}
+
+func (b *BTree[K, V]) deleteEntry(node *Node[K, V], idx int) {
+	copy(node.Entries[idx:], node.Entries[idx+1:])
+	node.Entries[len(node.Entries)-1] = nil
+	node.Entries = node.Entries[:len(node.Entries)-1]
+}
+
+func (b *BTree[K, V]) deleteChild(node *Node[K, V], idx int) {
+	if idx >= len(node.Children) {
+		return
+	}
+	copy(node.Children[idx:], node.Children[idx+1:])
+	node.Children[len(node.Children)-1] = nil
+	node.Children = node.Children[:len(node.Children)-1]
 }
