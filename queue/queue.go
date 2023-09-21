@@ -30,6 +30,24 @@ func (q *Queue[T]) Len() int {
 	return len(q.items)
 }
 
+// First returns the first item in the queue
+func (q *Queue[T]) First() *T {
+	if len(q.items) <= 0 {
+		return nil
+	}
+
+	return &q.items[0]
+}
+
+// Last returns the last item in the queue
+func (q *Queue[T]) Last() *T {
+	if len(q.items) <= 0 {
+		return nil
+	}
+
+	return &q.items[len(q.items)-1]
+}
+
 // Iterator returns a pointer to an iterator we can use to traverse the queue
 func (q *Queue[T]) Iterator() *Iterator[T] {
 	return &Iterator[T]{
