@@ -1,7 +1,7 @@
 package priorityQueue
 
 import (
-	"datastructures/queue"
+	"github.com/RuseAlex/datastructures/queue"
 )
 
 type PriorityQueue[T any] struct {
